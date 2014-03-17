@@ -30,17 +30,20 @@ Debouncer debBtn(
 	onPress,
 	onRelease
 );
-volatile unsigned long btnHoldtimeProjLamp	= 2000;		// If button is pressed for x msec, lit projector lamp only.
+volatile unsigned long btnHoldtimeProjLamp	= 1000;		// If button is pressed for x msec, lit projector lamp only.
 volatile unsigned long time;
 volatile boolean isLampConfiged				= false;
 
-// Status LED
+// Status indicators
 volatile const int STATE_LED_PIN 			= 13;
 volatile const int STATE2_LED_PIN 			= 7;
+volatile const int BUZZER_PIN 				= 6;
 
 BlinkTask scanLED( STATE2_LED_PIN, 250 );
 BlinkTask standbyLED( STATE_LED_PIN, 500, 1000 );
 BlinkTask stopLED( STATE_LED_PIN, 100, 100, 4 );
+
+BlinkTask stopBUZZER( BUZZER_PIN, 500, 750, 3 );
 
 
 // Projector
@@ -56,8 +59,8 @@ volatile const int slideDelayTime			= 100;		// Time between slides (msec)
 volatile const int FOCUS_PIN				= 9;		// Arduino pin for camera focus (relay 3)
 volatile const int SHUTTER_PIN				= 10;		// Arduino pin for camera shutter (relay 2)
 
-volatile const int focusPressTime			= 200;		// Time in msec focus is activated before shutter is activated
-volatile const int shutterPressTime			= 400;		// Time in msec shutter is activated
+volatile const int focusPressTime			= 150;		// Time in msec focus is activated before shutter is activated
+volatile const int shutterPressTime			= 350;		// Time in msec shutter is activated
 
 
 /**
@@ -86,7 +89,7 @@ DelayRun startScan( 2000, NULL, &aTask );					// Wait a bit for the lamp to warm
 
 
 // Listen for button press
-Task buttonPressTime( 100, CB_buttonPressTime );
+Task buttonPressTime( 50, CB_buttonPressTime );
 
 // Insert one slide so we can adjust camera
 BlinkTask slideMoverLampConfig( PROJ_BUTTON_PIN, projPressTime, 0, 1 );
@@ -129,6 +132,7 @@ void setup()
 	delay(1000);
 
 	//Serial.println("READY!");
+	slideCount = 0;
 
 	// Ready
 	standbyLED.start();
@@ -169,7 +173,11 @@ boolean CB_endScanTask(Task* task)				// 6 All ready for the next batch
 boolean CB_moveSlides(Task* task)				// 5 Ending sequence
 {
 	digitalWrite(PROJ_LAMP_PIN, LOW);
+	slideCount = 0;
+
 	slideMoverEnd.start();
+	stopBUZZER.start();
+
 	return true;
 }
 
@@ -273,10 +281,10 @@ void onPress()
 void onRelease(unsigned long timeMs)
 {
 	SoftTimer.remove(&buttonPressTime);
-	slideCount = 0;
 
 	if( timeMs < btnHoldtimeProjLamp )			// Long button press = lit projector lamp only. Good for camera setup.
 	{
+		slideCount = 0;
 
 		if(buttonClicked)
 		{
